@@ -1,6 +1,6 @@
 # Dental Tooth Classification
 
-Binary classification of dental X-ray images (**old** vs **teen**) using a TensorFlow/Keras Conv2D CNN.
+Binary classification of dental X-ray images (**old** vs **teen**) using a TensorFlow/Keras model (MobileNetV2 transfer learning).
 
 > **Disclaimer:** This is a research / teaching demo only. It is not validated for clinical diagnosis or treatment decisions.
 
@@ -24,28 +24,29 @@ DentalImages3/
     CROP_ADOLESCENT/    # mapped → teen
     CROP_ADULT/         # mapped → old
     CROP_CHILD/         # mapped → teen
-  Validate/
+  Validate/             # optional; duplicate of Train in this repo — not used as val set
     (same three folders)
   Test/
     *.jpg               # flat folder, unlabeled holdout images
 ```
 
-### Image counts (current dataset)
+### Validation split (programmatic)
 
-| Split | CROP_ADOLESCENT | CROP_ADULT | CROP_CHILD | Flat Test |
-|-------|-----------------|------------|------------|-----------|
-| Train | 4 | 9 | 46 | — |
-| Validate | 4 | 9 | 46 | — |
-| Test | — | — | — | 29 |
-| **Total** | | | | **147** |
+`Convo2dModel.py` does **not** use the on-disk `Validate/` folder for metrics. That folder is byte-identical to `Train/` in the current dataset. Instead:
 
-`Convo2dModel.py` builds a cached binary layout at `DentalImages3/_binary/` (`old/` + `teen/`) via symlinks so Keras `class_mode="binary"` works with the three raw age folders.
+1. Collect unique labeled images from `Train/` + `Validate/` (content-hash dedupe).
+2. Apply an **~80/20 stratified train/val split** (scikit-learn, `random_state=42`).
+3. Cache symlinks under `DentalImages3/_binary/train/` and `.../val/` for Keras.
 
 Re-count after changes:
 
 ```bash
-python -c "from Convo2dModel import dataset_counts; print(dataset_counts())"
+python -c "from Convo2dModel import dataset_counts, collect_labeled_pool; print(dataset_counts()); print('deduped labeled:', len(collect_labeled_pool()))"
 ```
+
+### Class imbalance
+
+Teen (adolescent + child) dominates the labeled pool. Training uses **balanced `class_weight`**, and reports **AUC, precision, recall**, plus a validation **confusion matrix** and **classification report** after `fit`.
 
 ## Train and evaluate
 
@@ -55,14 +56,24 @@ python Convo2dModel.py
 
 Outputs:
 
-- `tooth_classifier.keras` — best checkpoint by validation accuracy
+- `tooth_classifier.keras` — best checkpoint by `val_auc`
 - `class_indices.json` — label → index map from training
-- `logs/fit/` — TensorBoard event files
+- `logs/fit/<timestamp>/` — TensorBoard event files
 
 TensorBoard:
 
 ```bash
 tensorboard --logdir logs/fit
+```
+
+### Metrics expectations
+
+On this small, imbalanced set (~59 deduped labeled images), expect **high variance** between runs. Use **val_auc** and the printed classification report rather than accuracy alone. Holdout `Test/` images have no public labels in-repo.
+
+## Tests
+
+```bash
+pytest tests/test_convo2d.py -q
 ```
 
 ## Streamlit demo
@@ -73,16 +84,16 @@ After training:
 streamlit run app.py
 ```
 
-Upload a cropped X-ray; the app shows **old** / **teen**, confidence, and P(teen).
+Upload a cropped X-ray; the app shows **old** / **teen**, confidence, and **P(teen)** / **P(old)**.
 
 ## Notebooks
 
 - `ToothClassification.ipynb` — original training notebook (`from Convo2dModel import toothClassification`)
-- `Dental tooth classification MAT.ipynb` — alternate Conv2D workflow
+- `Dental tooth classification MAT.ipynb` — **deprecated** legacy notebook (3-class Conv2D, `validation_data=train` bug). Use `python Convo2dModel.py` or `ToothClassification.ipynb` instead.
 
 ## Results / limitations
 
-- Small dataset (~59 training images per epoch after binary merge: 50 teen + 9 old) with class imbalance; metrics vary run-to-run.
+- Small dataset with class imbalance; metrics vary run-to-run.
 - Mapping: **adolescent + child → teen**, **adult → old**; test images have no public labels in-repo.
 - Model input is 200×200 RGB; expects cropped X-rays similar to training data.
 - Not FDA-cleared, not peer-reviewed for clinical use—suitable for coursework and experimentation only.
