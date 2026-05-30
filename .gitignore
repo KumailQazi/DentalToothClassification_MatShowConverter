@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 .venv/
 
+# Local dataset (not versioned)
+DentalImages3/
+
 # Training artifacts
 logs/
 models/
