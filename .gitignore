@@ -1,3 +1,20 @@
-# Default ignored files
-Convo2dModel.py
-ToothClassification.ipynb
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Training artifacts
+logs/
+models/
+tooth_classifier.keras
+class_indices.json
+DentalImages3/_binary/
+
+# OS / IDE
+.DS_Store
+.ipynb_checkpoints/
+
+# Agent skills (local installs via skills.sh / Cursor)
+.agents/
+.cursor/skills/
+skills-lock.json
